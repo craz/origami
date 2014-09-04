@@ -1,12 +1,21 @@
 public class Origami {
+        public List<SObject> created_records;
+
         private Boolean is_test;
-        private Map<String, String> unchunked_records;
-        private List<SObject> chunked_records;
+
+        //chunked/unchunkled collections for dml flushing functionality
+        private Map<String, List<SObject>> unchunked_records_create;
+        private List<SObject> chunked_records_create;
+
         private Set<String> legal_filters = new Set<String>{'WHERE', 'LIMIT', 'ORDER BY'};
         private List<String> ordered_filters = new List<String>{'WHERE', 'LIMIT', 'ORDER BY'};
 
 	public Origami(Boolean is_test) {
             this.is_test = is_test;
+            this.unchunked_records_create = new Map<String, List<SObject>>();
+            this.chunked_records_create = new List<SObject>();
+
+            this.created_records = new List<SObject>();
 	}
 
         /*********************************
@@ -46,6 +55,50 @@ public class Origami {
         public SObject get(String obj, List<String> fields, Map<String, String> filters){
             filters.put('Limit', '1');
             return this.query(obj, fields, filters)[0];
+        }
+
+        public SObject create(String obj, Map<String, Object> fields){
+            Schema.SObjectType new_type = Schema.getGlobalDescribe().get(obj);
+            SObject new_rec = (SObject)new_type.newSObject();
+            
+            for(String fn : fields.keySet()){
+                new_rec.put(fn, fields.get(fn));
+            }
+
+            if(!this.unchunked_records_create.containsKey(obj)){
+                this.unchunked_records_create.put(obj, new List<Sobject>());
+            }
+
+            this.unchunked_records_create.get(obj).add(new_rec);
+
+            return new_rec;
+        }
+
+        public Map<String, List<SObject>> flush(){
+            Map<String, List<SObject>> results = new Map<String, List<SObject>>{'created' => new List<SObject>(), 'updated' => new List<SObject>()};
+            Integer x = 0;
+
+            for(String type : this.unchunked_records_create.keySet()){
+                if(x==10){
+                    results.get('created').addAll(this.chunked_records_create);
+                    insert this.chunked_records_create;
+                    this.chunked_records_create.clear();
+                    x = 0;
+                }
+
+                this.chunked_records_create.addAll(this.unchunked_records_create.get(type));
+                this.unchunked_records_create.remove(type);
+                x++;
+
+                if(this.unchunked_records_create.size() ==  0){
+                    insert this.chunked_records_create;
+                    results.get('created').addAll(this.chunked_records_create);
+                    this.chunked_records_create.clear();
+                    x = 0;
+                }
+            }
+
+            return results;
         }
 
         /*********************************
