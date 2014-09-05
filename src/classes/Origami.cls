@@ -8,7 +8,7 @@ public class Origami {
         private List<SObject> chunked_records_create;
 
         private Set<String> legal_filters = new Set<String>{'WHERE', 'LIMIT', 'ORDER BY'};
-        private List<String> ordered_filters = new List<String>{'WHERE', 'LIMIT', 'ORDER BY'};
+        private List<String> ordered_filters = new List<String>{'WHERE', 'ORDER BY', 'LIMIT'};
 
 	public Origami(Boolean is_test) {
             this.is_test = is_test;
@@ -23,25 +23,12 @@ public class Origami {
 
         **********************************/
 
-        //Query for records with no filters
-        public List<SObject> query(String obj, List<String> fields){
-            String joined_fields = this.join(fields, ', ');
-            String query =String.format('SELECT {0} FROM {1}', new List<String>{joined_fields, obj});
-            try{
-                List<SObject> result = Database.query(query);
-                return result;
-            } catch(Exception e){
-                system.debug(query);
-                system.debug(e);
-                return null;
-            }
-        }
-
         //Query for records with filters
         public List<SObject> query(String obj, List<String> fields, Map<String, String> filters){
             String joined_fields = this.join(fields, ', ');
             String query =String.format('SELECT {0} FROM {1}', new List<String>{joined_fields, obj});
             query = apply_filters(filters, query);
+            system.debug(query);
             try{
                 List<SObject> result = Database.query(query);
                 return result;
@@ -49,6 +36,18 @@ public class Origami {
                 system.debug(e);
                 return null;
             }
+        }
+
+        //Query for records with no filters
+        public List<SObject> query(String obj, List<String> fields){
+            Map<String, String> filters = new Map<String, String>();
+            return this.query(obj, fields, filters);
+        }
+
+        //get a single record no filters
+        public SObject get(String obj, List<String> fields){
+            Map<String, String> filters = new Map<String, String>();
+            return this.get(obj, fields, filters);
         }
 
         //Get a single record
@@ -115,7 +114,7 @@ public class Origami {
 
             for(String f : ordered_filters){
                 if(filters.containsKey(f)){
-                    query+=f + filters.get(f);
+                    query+= ' ' + f + ' ' +  filters.get(f).replace('"', '\'');
                 }
             }
 
